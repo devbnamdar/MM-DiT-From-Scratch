@@ -1,0 +1,17 @@
+# Core (install PyTorch separately if you need a specific CUDA version: https://pytorch.org)
+torch>=2.0.0
+torchvision
+
+# Model & Data
+transformers>=4.30.0
+sentencepiece
+safetensors
+Pillow
+numpy
+
+# Training
+tensorboard
+tqdm
+
+# Inference UI
+gradio>=4.0.0

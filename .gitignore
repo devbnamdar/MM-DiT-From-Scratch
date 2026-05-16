@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# VAE Weights (too large for Git)
+vae_models/*.pth
+
+# Training Outputs
+diffusion_outputs*/
+generated_samples/
+checkpoints/
+
+# Data Files
+*.db
+*.tar
+ar_buckets.json
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Misc
+*.ckpt
