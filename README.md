@@ -136,7 +136,7 @@ All dataset paths, model architectures, and training hyperparameters are central
 **Step 2.1: Setup the Custom VAE**
 Download the pre-trained custom 8-channel VAE from the [Pre-trained Models](#-pre-trained-models) section and specify its path in `config.py`:
 ```python
-vae_path = "vae_models/Nova_ae_f8.pth"
+vae_path = "vae_models/Nova_ae_f8.safetensors"
 ```
 
 **Step 2.2: Define Datasets**
