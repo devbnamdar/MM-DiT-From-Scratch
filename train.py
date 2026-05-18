@@ -44,7 +44,12 @@ def load_vae(vae_path, device):
     
     if os.path.exists(vae_path):
         print(f"Loading VAE weights: {vae_path}")
-        checkpoint = torch.load(vae_path, map_location='cpu', weights_only=False)
+        if vae_path.endswith('.safetensors'):
+            from safetensors.torch import load_file
+            checkpoint = load_file(vae_path)
+        else:
+            checkpoint = torch.load(vae_path, map_location='cpu', weights_only=False)
+  
         if 'model_state_dict' in checkpoint:
             vae.load_state_dict(checkpoint['model_state_dict'], strict=True)
         else:
