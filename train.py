@@ -248,6 +248,7 @@ def train(args):
     global_optim_step = 0
     total_images_seen = 0
     items_to_skip_this_epoch = 0
+    best_loss = float('inf')
     state_json_path = os.path.join(config.output_path, "training_state.json")
     
     if getattr(args, 'resume_from_checkpoint', None):
@@ -280,6 +281,17 @@ def train(args):
                 resume_path = None
                 print("Latest checkpoint not found, starting from scratch.")
                 
+        elif resume_path == "best":
+            best_checkpoints_dirs = [d for d in glob.glob(os.path.join(config.output_path, "checkpoints", "best_checkpoint_step_*")) if os.path.isdir(d)]
+            if best_checkpoints_dirs:
+                resume_path = best_checkpoints_dirs[0]
+            else:
+                resume_path = None
+                print("\n" + "="*60)
+                print("=> WARNING: 'best' checkpoint not found!")
+                print("=> Training will start from scratch.")
+                print("="*60 + "\n")
+                
         if resume_path and os.path.exists(resume_path):
             print(f"=> Loading Checkpoint: {resume_path}")
             if os.path.isdir(resume_path):
@@ -296,6 +308,8 @@ def train(args):
                     ckpt_state = json.load(f)
                 global_optim_step = ckpt_state.get("step", 0)
                 start_epoch_ckpt = ckpt_state.get("epoch", 1) - 1
+                if ckpt_state.get("best_loss") is not None:
+                    best_loss = ckpt_state.get("best_loss")
             else:
                 try:
                     checkpoint = torch.load(resume_path, map_location='cpu', weights_only=False)
@@ -319,6 +333,8 @@ def train(args):
                     start_epoch = state_data.get("epoch", start_epoch_ckpt)
                     items_to_skip_this_epoch = state_data.get("images_seen_this_epoch", 0)
                     total_images_seen = state_data.get("total_images_seen", 0)
+                    if state_data.get("best_loss") is not None:
+                        best_loss = state_data.get("best_loss")
                     print(f"=> JSON State Loaded! Total Images Seen: {total_images_seen}, Continuing from Epoch: {start_epoch+1}")
             else:
                 start_epoch = start_epoch_ckpt
@@ -339,6 +355,8 @@ def train(args):
     optimizer.zero_grad() # Reset at the start of training
     
     accumulated_loss = 0.0 # To accumulate the loss of all micro-batches
+    checkpoint_loss_sum = 0.0
+    checkpoint_step_count = 0
     
     for epoch in range(start_epoch, config.num_epochs):
         model.train()
@@ -414,6 +432,10 @@ def train(args):
                 optimizer.zero_grad()
                 global_optim_step += 1
                 
+                current_loss = accumulated_loss
+                checkpoint_loss_sum += current_loss
+                checkpoint_step_count += 1
+                
                 # --- Tensorboard Logs ---
                 if global_optim_step % config.log_steps == 0:
                     writer.add_scalar("Loss/train_velocity", accumulated_loss, global_optim_step)
@@ -424,6 +446,16 @@ def train(args):
                     
                 # --- Save Core (Steps - Based) ---
                 if global_optim_step % config.checkpoint_freq == 0:
+                    avg_checkpoint_loss = checkpoint_loss_sum / max(1, checkpoint_step_count)
+                    if avg_checkpoint_loss < best_loss:
+                        is_best = True
+                        best_loss = avg_checkpoint_loss
+                    else:
+                        is_best = False
+                        
+                    checkpoint_loss_sum = 0.0
+                    checkpoint_step_count = 0
+
                     checkpoint_dir = os.path.join(config.output_path, "checkpoints", f"checkpoint_step_{global_optim_step}")
                     os.makedirs(checkpoint_dir, exist_ok=True)
                     
@@ -439,12 +471,29 @@ def train(args):
                     with open(os.path.join(checkpoint_dir, "training_state.json"), "w") as f:
                         json.dump({
                             "step": global_optim_step,
-                            "epoch": epoch + 1
+                            "epoch": epoch + 1,
+                            "best_loss": best_loss if best_loss != float('inf') else None
                         }, f)
                         
                     shutil.copy("config.py", os.path.join(checkpoint_dir, "config.py"))
                         
                     print(f"\nWeights saved as separate files (in folder): {checkpoint_dir}")
+                    
+                    # Best Checkpoint Logic
+                    if is_best:
+                        best_checkpoint_dir = os.path.join(config.output_path, "checkpoints", f"best_checkpoint_step_{global_optim_step}")
+                        
+                        # Remove previous best checkpoints
+                        old_best_checkpoints = [d for d in glob.glob(os.path.join(config.output_path, "checkpoints", "best_checkpoint_step_*")) if os.path.isdir(d)]
+                        for old_best in old_best_checkpoints:
+                            try:
+                                shutil.rmtree(old_best)
+                            except Exception as e:
+                                print(f"Could not remove old best checkpoint {old_best}: {e}")
+                                
+                        # Copy current checkpoint to best_checkpoint
+                        shutil.copytree(checkpoint_dir, best_checkpoint_dir)
+                        print(f"=> New best checkpoint saved! Loss improved to {best_loss:.4f}. Saved at: {best_checkpoint_dir}")
                     
                     # Clean up old checkpoints (max_checkpoints)
                     all_checkpoints = glob.glob(os.path.join(config.output_path, "checkpoints", "mm_dit_step_*.pt")) + glob.glob(os.path.join(config.output_path, "mm_dit_step_*.pt"))
@@ -474,7 +523,8 @@ def train(args):
                             "epoch": epoch,
                             "images_seen_this_epoch": images_seen_this_epoch_tracker,
                             "total_images_seen": total_images_seen,
-                            "global_optim_step": global_optim_step
+                            "global_optim_step": global_optim_step,
+                            "best_loss": best_loss if best_loss != float('inf') else None
                         }, f)
             
             current_lr = optimizer.param_groups[0]['lr']
@@ -485,7 +535,7 @@ def train(args):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--resume-from-checkpoint', type=str, default=None, help='The .pt weight to resume from or "latest"')
+    parser.add_argument('--resume-from-checkpoint', type=str, default=None, help='The .pt weight to resume from, "latest", or "best"')
     parser.add_argument('--force-lr', type=float, default=None, help='Force change LR value during training (or when resuming) (e.g., 1e-4)')
     args = parser.parse_args()
     train(args)
