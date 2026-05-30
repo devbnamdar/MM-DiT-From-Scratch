@@ -65,7 +65,7 @@ state = ModelState()
 
 # Architecture configuration
 class AppConfig:
-    vae_path = "vae_models/Nova_ae_f8.pth"
+    vae_path = "vae_models/Nova_ae_f8.safetensors"
     t5_path = "t5-base"
     
     image_size = 512
@@ -261,7 +261,7 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="indigo", secondary_hue="slate")
                 base_model_path = gr.Textbox(label="Base Model Path (.safetensors or .pth)", value="", placeholder="Enter the path to your model.safetensors checkpoint file")
             with gr.Group():
                 gr.Markdown("#### Side Components (VAE)")
-                vae_path = gr.Textbox(label="VAE Path (Relative to project directory or absolute path)", value="vae_models/Nova_ae_f8.pth")
+                vae_path = gr.Textbox(label="VAE Path (Relative to project directory or absolute path)", value="vae_models/Nova_ae_f8.safetensors")
                 
             load_btn = gr.Button("💾 Load Models to GPU", variant="secondary")
             load_status = gr.Textbox(label="Loading Status", interactive=False)
