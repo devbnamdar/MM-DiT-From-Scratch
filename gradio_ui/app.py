@@ -88,19 +88,24 @@ def load_models(base_model_path, vae_path):
     try:
         t5_path = state.config.t5_path
         print("Loading models...")
-        
+
         # Convert to absolute path if paths are given relative to project root
         if vae_path and not os.path.isabs(vae_path):
             abs_vae_path = os.path.join(project_root, vae_path)
         else:
             abs_vae_path = vae_path
 
+        if base_model_path and not os.path.isabs(base_model_path):
+            abs_base_model_path = os.path.join(project_root, base_model_path)
+        else:
+            abs_base_model_path = base_model_path
+
         # 1. Load VAE
         if state.vae is None or state.last_vae_path != abs_vae_path:
             print(f"[*] Loading VAE: {abs_vae_path}")
             state.vae = load_vae_for_inference(abs_vae_path, state.device)
             state.last_vae_path = abs_vae_path
-            
+
         # 2. Load T5
         if state.t5_embedder is None or state.last_t5_path != t5_path:
             print(f"[*] Loading T5 Embedder: {t5_path}")
@@ -108,17 +113,17 @@ def load_models(base_model_path, vae_path):
             state.last_t5_path = t5_path
 
         # 3. Loading Base Model (MM-DiT)
-        print(f"[*] Loading Base Model: {base_model_path}")
+        print(f"[*] Loading Base Model: {abs_base_model_path}")
         state.model = MMDiT(state.config).to(state.device)
-        
-        if not os.path.exists(base_model_path):
-            return f"Error: Base model file not found: {base_model_path}"
-            
+
+        if not os.path.exists(abs_base_model_path):
+            return f"Error: Base model file not found: {abs_base_model_path}"
+
         try:
             from safetensors.torch import load_file
-            state.model.load_state_dict(load_file(base_model_path), strict=False)
+            state.model.load_state_dict(load_file(abs_base_model_path), strict=False)
         except ImportError:
-            state.model.load_state_dict(torch.load(base_model_path, map_location='cpu', weights_only=False), strict=False)
+            state.model.load_state_dict(torch.load(abs_base_model_path, map_location='cpu', weights_only=False), strict=False)
 
         return "All models loaded successfully! You can now switch to the 'Generation' tab."
     except Exception as e:
